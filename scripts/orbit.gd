@@ -91,6 +91,18 @@ func velocity_at(time: float) -> Vector2:
 	return _velocity_at_true_anomaly(true_anomaly_at(time))
 
 
+## The first time at or after after_time when the orbit passes the given true anomaly.
+## INF if an escape orbit has already passed it.
+func next_time_at_true_anomaly(nu: float, after_time: float) -> float:
+	var target := _true_to_mean_anomaly(nu)
+	var n := mean_motion()
+	if is_elliptic():
+		var current := mean_anomaly_at_epoch + n * (after_time - epoch)
+		return after_time + fposmod(target - current, TAU) / n
+	var time := epoch + (target - mean_anomaly_at_epoch) / n
+	return time if time >= after_time else INF
+
+
 ## The positive true anomaly where the orbit is at distance r from the center
 ## (the other crossing is at minus this value). NAN if the orbit never reaches r.
 func true_anomaly_at_radius(r: float) -> float:

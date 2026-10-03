@@ -1,13 +1,12 @@
-extends SceneTree
-
-## Run from the project folder: godot --headless --script res://tests/test_orbit.gd
+extends RefCounted
 
 const MU := 3531.6
 
 var _failures := 0
 
 
-func _init() -> void:
+## Runs every test and returns the number of failures.
+func run() -> int:
 	_test_circular_orbit_does_not_drift()
 	_test_apsides_match_construction()
 	_test_round_trip_elliptic()
@@ -16,8 +15,7 @@ func _init() -> void:
 	_test_energy_is_conserved()
 	_test_matches_numerical_integration()
 	_test_true_anomaly_at_radius()
-	print("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures)
-	quit(1 if _failures > 0 else 0)
+	return _failures
 
 
 func _test_circular_orbit_does_not_drift() -> void:
