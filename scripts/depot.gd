@@ -77,15 +77,23 @@ func _process(_delta: float) -> void:
 
 
 func _draw() -> void:
-	var zoom := get_viewport().get_canvas_transform().get_scale().x
+	draw_ring(self, Vector2.ZERO, 1.0)
+
+
+## Draws the depot ring, its docking zone and its label around `center`, in `canvas`'s coordinates.
+## Call only from `canvas`'s _draw. Ghost copies at future encounters use a lower `opacity`.
+func draw_ring(canvas: CanvasItem, center: Vector2, opacity: float) -> void:
+	var zoom := canvas.get_viewport().get_canvas_transform().get_scale().x
 	var r := orbit_radius()
-	var zone := color
-	zone.a = 0.07
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 128, zone, 2.0 * tolerance, true)
+	var line_color := color
+	line_color.a *= opacity
+	var zone := line_color
+	zone.a = 0.07 * opacity
+	canvas.draw_arc(center, r, 0.0, TAU, 128, zone, 2.0 * tolerance, true)
 	var dashes := 72
 	for i in dashes:
 		if i % 2 == 0:
-			draw_arc(Vector2.ZERO, r, TAU * i / dashes, TAU * (i + 1) / dashes, 6, color, 2.0 / zoom, true)
-	draw_set_transform(Vector2(0, -r), 0.0, Vector2.ONE / zoom)
-	draw_string(ThemeDB.fallback_font, Vector2(8, -8), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, color)
-	draw_set_transform(Vector2.ZERO)
+			canvas.draw_arc(center, r, TAU * i / dashes, TAU * (i + 1) / dashes, 6, line_color, 2.0 / zoom, true)
+	canvas.draw_set_transform(center + Vector2(0, -r), 0.0, Vector2.ONE / zoom)
+	canvas.draw_string(ThemeDB.fallback_font, Vector2(8, -8), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, line_color)
+	canvas.draw_set_transform(Vector2.ZERO)

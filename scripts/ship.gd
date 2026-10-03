@@ -444,6 +444,7 @@ func _add_window(window: Dictionary, line_color: Color,
 		ghosts.append({
 			"position": anchor, "radius": body.radius,
 			"sphere_of_influence": body.sphere_of_influence, "color": line_color,
+			"depots": get_tree().get_nodes_in_group("depots").filter(func(depot: Depot) -> bool: return depot.body == body),
 		})
 
 	for apsis in [[0.0, "Pe"], [PI, "Ap"]]:

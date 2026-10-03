@@ -11,7 +11,8 @@ extends Node2D
 var _lines: Array[Dictionary] = []
 ## Each: {"position": Vector2, "label": String, "color": Color}
 var _markers: Array[Dictionary] = []
-## Each: {"position": Vector2, "radius": float, "sphere_of_influence": float, "color": Color}
+## Each: {"position": Vector2, "radius": float, "sphere_of_influence": float, "color": Color,
+## "depots": Array of the body's Depots, drawn around the ghost}
 var _ghosts: Array[Dictionary] = []
 
 
@@ -31,6 +32,8 @@ func _draw() -> void:
 		var faded: Color = ghost.color
 		faded.a *= 0.5
 		draw_arc(ghost.position, ghost.sphere_of_influence, 0.0, TAU, 128, faded, width, true)
+		for depot in ghost.depots:
+			depot.draw_ring(self, ghost.position, 0.5)
 
 	for line in _lines:
 		if line.points.size() >= 2:

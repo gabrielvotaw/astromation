@@ -94,8 +94,12 @@ func _maneuver_lines() -> PackedStringArray:
 		var final_orbit: Orbit = final_segment[0].orbit
 		var final_body: CelestialBody = final_segment[0].body
 		var apoapsis := "escaping" if not final_orbit.is_elliptic() else "%s km" % _format_thousands(roundi(final_orbit.apoapsis() - final_body.radius))
-		lines.append("After all maneuvers: orbiting %s, Apoapsis %s, Periapsis %s km" % [
-			final_body.name, apoapsis, _format_thousands(roundi(final_orbit.periapsis() - final_body.radius))])
+		var zone := ""
+		for depot in get_tree().get_nodes_in_group("depots"):
+			if depot.orbit_matches(final_body, final_orbit):
+				zone = "    (in %s zone)" % depot.label
+		lines.append("After all maneuvers: orbiting %s, Apoapsis %s, Periapsis %s km%s" % [
+			final_body.name, apoapsis, _format_thousands(roundi(final_orbit.periapsis() - final_body.radius)), zone])
 		var encounter := _encounter_text(ship.next_encounter(final_segment))
 		lines.append("After all maneuvers: " + (encounter if encounter != "" else "no encounter"))
 	return lines
