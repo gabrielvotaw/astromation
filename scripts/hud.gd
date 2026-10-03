@@ -13,7 +13,10 @@ func _process(_delta: float) -> void:
 		"Sim speed: %sx    T+ %s" % [String.num(Sim.speed), _format_duration(Sim.time)],
 	])
 
-	if ship and ship.orbit:
+	if ship and ship.crashed:
+		lines.append("")
+		lines.append("CRASHED - press R to reset")
+	elif ship and ship.orbit:
 		var orbit := ship.orbit
 		var radius := ship.central_body.radius
 		var altitude := orbit.position_at(Sim.time).length() - radius
@@ -23,6 +26,8 @@ func _process(_delta: float) -> void:
 		lines.append("")
 		lines.append("Altitude: %s km    Speed: %s m/s" % [_format_thousands(roundi(altitude)), _format_thousands(roundi(speed))])
 		lines.append("Apoapsis: %s    Periapsis: %s km    Period: %s" % [apoapsis, _format_thousands(roundi(orbit.periapsis() - radius)), period])
+		var engine := "off" if ship.thrust == Vector2.ZERO else "%d%%" % roundi(ship.thrust.length() * 100.0)
+		lines.append("Engine: %s    Delta-v used: %s m/s" % [engine, _format_thousands(roundi(ship.delta_v_used))])
 
 	_info_label.text = "\n".join(lines)
 

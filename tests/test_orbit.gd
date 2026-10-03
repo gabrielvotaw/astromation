@@ -15,6 +15,7 @@ func _init() -> void:
 	_test_round_trip_hyperbolic()
 	_test_energy_is_conserved()
 	_test_matches_numerical_integration()
+	_test_true_anomaly_at_radius()
 	print("ALL PASSED" if _failures == 0 else "%d FAILED" % _failures)
 	quit(1 if _failures > 0 else 0)
 
@@ -87,6 +88,17 @@ func _test_matches_numerical_integration() -> void:
 
 	var predicted := orbit.position_at(steps * dt)
 	_check("matches step-by-step simulation", predicted.distance_to(Vector2(x, y)) < 0.05)
+
+
+func _test_true_anomaly_at_radius() -> void:
+	var periapsis := 500.0
+	var apoapsis := 1000.0
+	var a := (periapsis + apoapsis) / 2.0
+	var orbit := Orbit.from_state(MU, Vector2(periapsis, 0), Vector2(0, -sqrt(MU * (2.0 / periapsis - 1.0 / a))), 0.0)
+	var nu := orbit.true_anomaly_at_radius(600.0)
+	_check("finds where the orbit crosses a radius", absf(orbit.position_at_true_anomaly(nu).length() - 600.0) < 1e-3)
+	_check("crossing is symmetric", absf(orbit.position_at_true_anomaly(-nu).length() - 600.0) < 1e-3)
+	_check("no crossing beyond apoapsis", is_nan(orbit.true_anomaly_at_radius(1200.0)))
 
 
 func _acceleration(x: float, y: float) -> Vector2:

@@ -84,36 +84,46 @@ func true_anomaly_at(time: float) -> float:
 
 
 func position_at(time: float) -> Vector2:
-	return _position_at_true_anomaly(true_anomaly_at(time))
+	return position_at_true_anomaly(true_anomaly_at(time))
 
 
 func velocity_at(time: float) -> Vector2:
 	return _velocity_at_true_anomaly(true_anomaly_at(time))
 
 
-## Points along the orbit for drawing. Parts farther than max_radius are left out.
-func sample_points(count := 256, max_radius := INF) -> PackedVector2Array:
+## The positive true anomaly where the orbit is at distance r from the center
+## (the other crossing is at minus this value). NAN if the orbit never reaches r.
+func true_anomaly_at_radius(r: float) -> float:
+	if eccentricity < 1e-9:
+		return NAN
+	var cos_nu := (semi_latus_rectum() / r - 1.0) / eccentricity
+	if absf(cos_nu) > 1.0:
+		return NAN
+	return acos(cos_nu)
+
+
+## Points around the whole ellipse, for drawing. Empty for escape orbits.
+func sample_points(count := 256) -> PackedVector2Array:
 	var points := PackedVector2Array()
-	var e := eccentricity
-
-	if is_elliptic() and apoapsis() <= max_radius:
-		for i in count + 1:
-			var eccentric_anomaly := TAU * i / count
-			var nu := 2.0 * atan2(sqrt(1.0 + e) * sin(eccentric_anomaly / 2.0), sqrt(1.0 - e) * cos(eccentric_anomaly / 2.0))
-			points.append(_position_at_true_anomaly(nu))
-		return points
-
-	if e < 1e-9:
-		return points
-	var max_true_anomaly := acos(clampf((semi_latus_rectum() / max_radius - 1.0) / e, -1.0, 1.0))
 	if not is_elliptic():
-		max_true_anomaly = minf(max_true_anomaly, acos(-1.0 / e) * 0.99)
+		return points
+	var e := eccentricity
 	for i in count + 1:
-		points.append(_position_at_true_anomaly(lerpf(-max_true_anomaly, max_true_anomaly, float(i) / count)))
+		var eccentric_anomaly := TAU * i / count
+		var nu := 2.0 * atan2(sqrt(1.0 + e) * sin(eccentric_anomaly / 2.0), sqrt(1.0 - e) * cos(eccentric_anomaly / 2.0))
+		points.append(position_at_true_anomaly(nu))
 	return points
 
 
-func _position_at_true_anomaly(nu: float) -> Vector2:
+## Points between two true anomalies, for drawing part of an orbit.
+func sample_arc(from_true_anomaly: float, to_true_anomaly: float, count := 128) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	for i in count + 1:
+		points.append(position_at_true_anomaly(lerpf(from_true_anomaly, to_true_anomaly, float(i) / count)))
+	return points
+
+
+func position_at_true_anomaly(nu: float) -> Vector2:
 	var r := semi_latus_rectum() / (1.0 + eccentricity * cos(nu))
 	var angle := argument_of_periapsis + direction * nu
 	return Vector2(r * cos(angle), r * sin(angle))

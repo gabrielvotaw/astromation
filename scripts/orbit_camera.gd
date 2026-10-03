@@ -1,6 +1,6 @@
 extends Camera2D
 
-## Scroll to zoom toward the cursor. Pan with right/middle mouse drag or WASD. F recenters.
+## Scroll to zoom toward the cursor. Pan with right/middle mouse drag or arrow keys. F recenters.
 
 @export var min_zoom := 0.02
 @export var max_zoom := 2.0
@@ -41,8 +41,8 @@ func _process(delta: float) -> void:
 	_update_zoom(delta)
 
 	var direction := Vector2(
-		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
-		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
+		float(Input.is_physical_key_pressed(KEY_RIGHT)) - float(Input.is_physical_key_pressed(KEY_LEFT)),
+		float(Input.is_physical_key_pressed(KEY_DOWN)) - float(Input.is_physical_key_pressed(KEY_UP))
 	)
 	position += direction.normalized() * pan_speed * delta / zoom.x
 
