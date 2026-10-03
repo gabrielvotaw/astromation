@@ -4,6 +4,8 @@ A space logistics prototype in Godot 4.7. Haven and its moon Pale are on rails, 
 
 **Play in your browser:** https://gabrielvotaw.github.io/astromation/
 
+![Planning a transfer to Pale, flying it, and delivering the crates](media/demo.gif)
+
 ## Controls
 
 | Input | Action |
