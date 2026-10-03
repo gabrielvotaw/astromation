@@ -89,7 +89,7 @@ func draw_ring(canvas: CanvasItem, center: Vector2, opacity: float) -> void:
 	line_color.a *= opacity
 	var zone := line_color
 	zone.a = 0.07 * opacity
-	canvas.draw_arc(center, r, 0.0, TAU, 128, zone, 2.0 * tolerance, true)
+	_draw_zone(canvas, center, r - tolerance, r + tolerance, zone)
 	var dashes := 72
 	for i in dashes:
 		if i % 2 == 0:
@@ -97,3 +97,20 @@ func draw_ring(canvas: CanvasItem, center: Vector2, opacity: float) -> void:
 	canvas.draw_set_transform(center + Vector2(0, -r), 0.0, Vector2.ONE / zoom)
 	canvas.draw_string(ThemeDB.fallback_font, Vector2(8, -8), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, line_color)
 	canvas.draw_set_transform(Vector2.ZERO)
+
+
+## A closed band of triangles. A thick translucent draw_arc shows a seam where its two ends overlap.
+static func _draw_zone(canvas: CanvasItem, center: Vector2, inner: float, outer: float, zone_color: Color) -> void:
+	var segments := 256
+	var points := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for i in segments:
+		var direction := Vector2.from_angle(TAU * i / segments)
+		points.append(center + direction * inner)
+		points.append(center + direction * outer)
+		var next := (i + 1) % segments
+		indices.append_array([2 * i, 2 * i + 1, 2 * next + 1, 2 * i, 2 * next + 1, 2 * next])
+	var colors := PackedColorArray()
+	colors.resize(points.size())
+	colors.fill(zone_color)
+	RenderingServer.canvas_item_add_triangle_array(canvas.get_canvas_item(), indices, points, colors)
