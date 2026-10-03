@@ -19,7 +19,7 @@ enum Kind { SUPPLY, DEMAND }
 @export var color := Color(0.45, 1.0, 0.6, 0.7)
 
 ## Crates handed out (supply) or received (demand) so far.
-var crates_moved := 0.0
+var crates_moved := 0
 
 var _last_time := 0.0
 
@@ -33,30 +33,38 @@ func orbit_radius() -> float:
 	return body.radius + altitude
 
 
-func is_docked(ship: Ship) -> bool:
-	if ship.crashed or ship.reference_body != body or ship.engine_output != Vector2.ZERO:
-		return false
-	if not ship.orbit.is_elliptic():
+## Whether an orbit around `around` lies within this depot's docking zone.
+func orbit_matches(around: CelestialBody, orbit: Orbit) -> bool:
+	if around != body or not orbit.is_elliptic():
 		return false
 	var r := orbit_radius()
-	return absf(ship.orbit.periapsis() - r) <= tolerance and absf(ship.orbit.apoapsis() - r) <= tolerance
+	return absf(orbit.periapsis() - r) <= tolerance and absf(orbit.apoapsis() - r) <= tolerance
 
 
-## Docks or undocks the ship and moves crates for `game_seconds` of docked time.
+func is_docked(ship: Ship) -> bool:
+	return not ship.crashed and ship.engine_output == Vector2.ZERO and orbit_matches(ship.reference_body, ship.orbit)
+
+
+## Docks or undocks the ship and moves crates for `game_seconds` of docked time. Crates move whole:
+## one each time a full crate's worth of transfer time has built up.
 func service(ship: Ship, game_seconds: float) -> void:
 	if not is_docked(ship):
 		if ship.docked_at == self:
 			ship.docked_at = null
+			ship.transfer_progress = 0.0
 		return
 	ship.docked_at = self
-	var amount := transfer_rate * game_seconds
-	if kind == Kind.SUPPLY:
-		amount = minf(amount, ship.capacity - ship.cargo)
-		ship.cargo += amount
-	else:
-		amount = minf(amount, ship.cargo)
-		ship.cargo -= amount
-	crates_moved += amount
+	ship.transfer_progress += transfer_rate * game_seconds
+	while ship.transfer_progress >= 1.0 and _can_transfer(ship):
+		ship.transfer_progress -= 1.0
+		ship.cargo += 1 if kind == Kind.SUPPLY else -1
+		crates_moved += 1
+	if not _can_transfer(ship):
+		ship.transfer_progress = 0.0
+
+
+func _can_transfer(ship: Ship) -> bool:
+	return ship.cargo < ship.capacity if kind == Kind.SUPPLY else ship.cargo > 0
 
 
 func _process(_delta: float) -> void:

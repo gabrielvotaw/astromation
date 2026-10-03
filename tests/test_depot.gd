@@ -18,6 +18,7 @@ func run(host: Node) -> int:
 	_test_burning_ship_is_not_docked(ship, haven_depot)
 	_test_wrong_body_is_not_docked(ship, pale_depot)
 	_test_unloads_at_demand_depot(ship, pale_depot, pale)
+	_test_frame_by_frame_round_trip_moves_every_crate(ship, haven_depot, pale_depot, pale)
 
 	host.remove_child(main)
 	main.free()
@@ -26,9 +27,9 @@ func run(host: Node) -> int:
 
 func _test_ship_starts_docked_and_loads(ship: Ship, depot: Depot) -> void:
 	ship.reset()
-	depot.service(ship, 40.0)
+	depot.service(ship, 2.1 / depot.transfer_rate)
 	_check("ship starts docked at the Haven depot", ship.docked_at == depot)
-	_check("docked ship loads crates over time", is_equal_approx(ship.cargo, depot.transfer_rate * 40.0))
+	_check("docked ship loads whole crates over time", ship.cargo == 2)
 
 
 func _test_loading_stops_at_capacity(ship: Ship, depot: Depot) -> void:
@@ -64,17 +65,38 @@ func _test_wrong_body_is_not_docked(ship: Ship, pale_depot: Depot) -> void:
 
 func _test_unloads_at_demand_depot(ship: Ship, depot: Depot, pale: CelestialBody) -> void:
 	ship.reset()
-	ship.cargo = 10.0
+	ship.cargo = 10
 	ship.reference_body = pale
 	var r := depot.orbit_radius()
 	ship.orbit = Orbit.from_state(pale.mu, Vector2(r, 0), Vector2(0, -sqrt(pale.mu / r)), Sim.time)
 	var before := depot.crates_moved
-	depot.service(ship, 100.0)
+	depot.service(ship, 5.1 / depot.transfer_rate)
 	_check("docked at the demand depot", ship.docked_at == depot)
-	_check("demand depot unloads crates", is_equal_approx(ship.cargo, 10.0 - depot.transfer_rate * 100.0))
-	_check("demand depot counts delivered crates", is_equal_approx(depot.crates_moved - before, depot.transfer_rate * 100.0))
+	_check("demand depot unloads whole crates", ship.cargo == 5)
+	_check("demand depot counts delivered crates", depot.crates_moved - before == 5)
 	depot.service(ship, 10000.0)
 	_check("unloading stops at empty", ship.cargo == 0.0)
+
+
+## Like the real game: many small transfer steps, one per frame (60 fps at 1x speed).
+func _test_frame_by_frame_round_trip_moves_every_crate(ship: Ship, haven_depot: Depot, pale_depot: Depot, pale: CelestialBody) -> void:
+	ship.reset()
+	var frame_seconds := Sim.BASE_TIME_SCALE / 60.0
+	var handed_out_before := haven_depot.crates_moved
+	for i in 2000:
+		haven_depot.service(ship, frame_seconds)
+	var loaded := floori(ship.cargo)
+	var handed_out := floori(haven_depot.crates_moved - handed_out_before)
+
+	ship.reference_body = pale
+	var r := pale_depot.orbit_radius()
+	ship.orbit = Orbit.from_state(pale.mu, Vector2(r, 0), Vector2(0, -sqrt(pale.mu / r)), Sim.time)
+	var delivered_before := pale_depot.crates_moved
+	for i in 2000:
+		pale_depot.service(ship, frame_seconds)
+	var delivered := floori(pale_depot.crates_moved - delivered_before)
+	_check("frame-by-frame: loads a full 10 crates (got %d, handed out %d)" % [loaded, handed_out], loaded == 10 and handed_out == 10)
+	_check("frame-by-frame: delivers all 10 crates (got %d)" % delivered, delivered == 10)
 
 
 func _check(name: String, passed: bool) -> void:
