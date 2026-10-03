@@ -58,7 +58,7 @@ ship = NodePath("../Ship")
 offset_left = 16.0
 offset_top = 12.0
 theme_override_colors/font_color = Color(0.8, 0.85, 0.95, 0.8)
-text = "W/S: prograde/retrograde    A/D: radial in/out    Shift: fine thrust    R: reset\nClick orbit: add maneuver    Drag handles: set burn (Shift: fine)    Drag node: move it    X: delete maneuver\nScroll: zoom    Right/middle drag or arrows: pan    F: cycle camera focus    Space: pause    Comma/Period: sim speed"
+text = "W/S: prograde/retrograde    A/D: radial in/out    Shift: fine thrust    R: reset\nClick path: add maneuver    Click node: select    Drag handles: set burn (Shift: fine)    Drag node: move it    X: delete\nScroll: zoom    Right/middle drag or arrows: pan    F: cycle camera focus    Space: pause    Comma/Period: sim speed"
 
 [node name="InfoLabel" type="Label" parent="HUD"]
 offset_left = 16.0

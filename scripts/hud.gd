@@ -26,7 +26,7 @@ func _process(_delta: float) -> void:
 		var apoapsis := "escaping" if not orbit.is_elliptic() else "%s km" % _format_thousands(roundi(orbit.apoapsis() - radius))
 		var period := "-" if not orbit.is_elliptic() else _format_duration(orbit.period())
 		var engine := "off"
-		if ship.maneuver and ship.maneuver.burning:
+		if not ship.maneuvers.is_empty() and ship.maneuvers[0].burning:
 			engine = "maneuver burn"
 		elif ship.thrust != Vector2.ZERO:
 			engine = "%d%%" % roundi(ship.thrust.length() * 100.0)
@@ -40,25 +40,46 @@ func _process(_delta: float) -> void:
 		if encounter != "":
 			lines.append(encounter)
 
-		var maneuver := ship.maneuver
-		if maneuver:
+		if not ship.maneuvers.is_empty():
 			lines.append("")
-			if maneuver.burning:
-				lines.append("Executing maneuver: %s m/s remaining" % _format_thousands(roundi(maneuver.remaining)))
-			else:
-				var dv := maneuver.delta_v
-				var burn_time := ship.burn_duration(dv.length())
-				lines.append("Maneuver: %s m/s (prograde %s, radial %s)" % [
-					_format_thousands(roundi(dv.length())), _format_thousands(roundi(dv.x)), _format_thousands(roundi(dv.y))])
-				lines.append("Burn: %s, starts in %s" % [_format_duration(burn_time), _format_duration(maxf(0.0, maneuver.time - burn_time / 2.0 - Sim.time))])
-				if not ship.planned_prediction.is_empty():
-					var planned_orbit: Orbit = ship.planned_prediction[0].orbit
-					var planned_apoapsis := "escaping" if not planned_orbit.is_elliptic() else "%s km" % _format_thousands(roundi(planned_orbit.apoapsis() - radius))
-					lines.append("After maneuver: Apoapsis %s, Periapsis %s km" % [planned_apoapsis, _format_thousands(roundi(planned_orbit.periapsis() - radius))])
-					var planned_encounter := _encounter_text(ship.next_encounter(ship.planned_prediction))
-					lines.append("After maneuver: " + (planned_encounter if planned_encounter != "" else "no encounter"))
+			lines.append_array(_maneuver_lines())
 
 	_info_label.text = "\n".join(lines)
+
+
+func _maneuver_lines() -> PackedStringArray:
+	var lines := PackedStringArray()
+	var next := ship.maneuvers[0]
+	if next.burning:
+		lines.append("Executing maneuver: %s m/s remaining" % _format_thousands(roundi(next.remaining)))
+	else:
+		var dv := next.delta_v
+		var burn_time := ship.burn_duration(dv.length())
+		lines.append("Next maneuver: %s m/s (prograde %s, radial %s)" % [
+			_format_thousands(roundi(dv.length())), _format_thousands(roundi(dv.x)), _format_thousands(roundi(dv.y))])
+		lines.append("Burn: %s, starts in %s" % [_format_duration(burn_time), _format_duration(maxf(0.0, next.time - burn_time / 2.0 - Sim.time))])
+
+	var total := 0.0
+	var invalid := 0
+	for maneuver in ship.maneuvers:
+		total += maneuver.remaining if maneuver.burning else maneuver.delta_v.length()
+		if not maneuver.valid:
+			invalid += 1
+	if ship.maneuvers.size() > 1:
+		lines.append("Planned maneuvers: %d, total %s m/s" % [ship.maneuvers.size(), _format_thousands(roundi(total))])
+	if invalid > 0:
+		lines.append("%d maneuver(s) past the end of the predicted path" % invalid)
+
+	if ship.plan.size() > 1:
+		var final_segment: Array = ship.plan.back()
+		var final_orbit: Orbit = final_segment[0].orbit
+		var final_body: CelestialBody = final_segment[0].body
+		var apoapsis := "escaping" if not final_orbit.is_elliptic() else "%s km" % _format_thousands(roundi(final_orbit.apoapsis() - final_body.radius))
+		lines.append("After all maneuvers: orbiting %s, Apoapsis %s, Periapsis %s km" % [
+			final_body.name, apoapsis, _format_thousands(roundi(final_orbit.periapsis() - final_body.radius))])
+		var encounter := _encounter_text(ship.next_encounter(final_segment))
+		lines.append("After all maneuvers: " + (encounter if encounter != "" else "no encounter"))
+	return lines
 
 
 func _encounter_text(encounter: Dictionary) -> String:

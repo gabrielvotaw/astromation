@@ -2,19 +2,19 @@ class_name Ship
 extends Node2D
 
 ## W/S: prograde/retrograde. A/D: radial in/out. Shift: 10% thrust. R: reset.
-## A planned maneuver is flown automatically, with the burn centered on the maneuver time.
+## Planned maneuvers are flown automatically, each burn centered on its maneuver time.
 
 ## Longest stretch of game time one thrust step covers, in seconds. Keeps burns accurate at high sim speed.
 const MAX_BURN_STEP := 0.5
 const FINE_THRUST := 0.1
 ## Game seconds between prediction refreshes while coasting, so the encounter search window keeps moving forward.
 const PREDICTION_REFRESH := 100.0
-const PATCH_COLORS: Array[Color] = [
+const LEG_COLORS: Array[Color] = [
 	Color(0.4, 0.85, 1.0, 0.75),
 	Color(1.0, 0.7, 0.3, 0.85),
 	Color(0.8, 0.55, 1.0, 0.75),
 ]
-## How visible the current path stays while a maneuver is planned.
+## How visible the unplanned path stays while maneuvers are planned.
 const DIMMED_ALPHA := 0.3
 
 @export var home_body: CelestialBody
@@ -29,12 +29,15 @@ const DIMMED_ALPHA := 0.3
 ## The body whose gravity the ship currently feels. `orbit` is relative to it.
 var reference_body: CelestialBody
 var orbit: Orbit
-## See Trajectory.predict for the patch format.
+## Where the ship goes if nothing else is done. See Trajectory.predict for the patch format;
+## patches here also carry "anchor_time" (see Maneuver.anchor_time).
 var prediction: Array[Dictionary] = []
-## Like `prediction`, but starting at the planned maneuver with its delta-v applied. Empty if there is no plan.
-var planned_prediction: Array[Dictionary] = []
-var maneuver: Maneuver
-## Set by the planner while the player is dragging the maneuver. Burns don't start mid-edit.
+## Planned maneuvers in flight order. A burning maneuver always comes first.
+var maneuvers: Array[Maneuver] = []
+## The planned path, one prediction per stretch: plan[0] is `prediction`, and each later entry starts
+## at a maneuver with its delta-v applied.
+var plan: Array = []
+## Set by the planner while the player is dragging a maneuver. Burns don't start mid-edit.
 var maneuver_editing := false
 var crashed := false
 ## Total speed change from burns so far, in m/s.
@@ -61,45 +64,88 @@ func reset() -> void:
 	orbit = Orbit.from_state(home_body.mu, Vector2(periapsis, 0.0), Vector2(0.0, -speed), Sim.time)
 	crashed = false
 	delta_v_used = 0.0
-	maneuver = null
+	maneuvers = []
 	_last_time = Sim.time
 	_predict(Sim.time)
 
 
-func add_maneuver(time: float) -> void:
-	maneuver = Maneuver.new()
+func add_maneuver(time: float) -> Maneuver:
+	var maneuver := Maneuver.new()
 	maneuver.time = time
+	maneuvers.append(maneuver)
+	update_plan()
+	return maneuver
+
+
+func remove_maneuver(maneuver: Maneuver) -> void:
+	maneuvers.erase(maneuver)
 	update_plan()
 
 
-func remove_maneuver() -> void:
-	maneuver = null
-	update_plan()
-
-
-## Recomputes planned_prediction. Call after changing the maneuver.
+## Recomputes `plan` and each maneuver's place on it. Call after changing any maneuver.
 func update_plan() -> void:
-	planned_prediction = []
-	if maneuver == null or maneuver.burning or crashed or prediction.is_empty():
+	plan = [prediction]
+	maneuvers.sort_custom(func(a: Maneuver, b: Maneuver) -> bool:
+		return a.burning if a.burning != b.burning else a.time < b.time)
+	for maneuver in maneuvers:
+		maneuver.valid = false
+	if crashed:
 		return
-	if maneuver.time > prediction[0].end_time:
-		return
-	var t := maneuver.time
-	var relative_position := orbit.position_at(t)
-	var velocity := orbit.velocity_at(t)
-	velocity += _local_to_world(maneuver.delta_v / 1000.0, relative_position, velocity)
-	planned_prediction = Trajectory.predict(reference_body, Orbit.from_state(reference_body.mu, relative_position, velocity, t), t)
+
+	for maneuver in maneuvers:
+		var segment: Array[Dictionary] = plan.back()
+		var patch := _patch_at(segment, maneuver.time)
+		if patch.is_empty():
+			break
+		maneuver.valid = true
+		maneuver.segment_index = plan.size() - 1
+		maneuver.body = patch.body
+		maneuver.orbit = patch.orbit
+		maneuver.anchor_time = patch.anchor_time
+		if maneuver.burning:
+			continue
+		var relative_position := maneuver.orbit.position_at(maneuver.time)
+		var velocity := maneuver.orbit.velocity_at(maneuver.time)
+		velocity += _local_to_world(maneuver.delta_v / 1000.0, relative_position, velocity)
+		var after := Trajectory.predict(maneuver.body, Orbit.from_state(maneuver.body.mu, relative_position, velocity, maneuver.time), maneuver.time)
+		_set_anchor_times(after, maneuver.anchor_time)
+		plan.append(after)
 
 
-## Where the maneuver sits and which way its prograde and radial-out axes point, in world space.
-func maneuver_frame() -> Dictionary:
-	var relative_position := orbit.position_at(maneuver.time)
-	var velocity := orbit.velocity_at(maneuver.time)
+## Where a maneuver sits and which way its prograde and radial-out axes point, in world space.
+func maneuver_frame(maneuver: Maneuver) -> Dictionary:
+	var relative_position := maneuver.orbit.position_at(maneuver.time)
+	var velocity := maneuver.orbit.velocity_at(maneuver.time)
 	return {
-		"position": reference_body.position_at(Sim.time) + relative_position,
+		"position": anchor_position(maneuver.body, maneuver.anchor_time) + relative_position,
 		"prograde": _local_to_world(Vector2(1, 0), relative_position, velocity),
 		"radial_out": _local_to_world(Vector2(0, 1), relative_position, velocity),
 	}
+
+
+## World position a body's orbits are drawn around. NAN anchor_time means its current position.
+func anchor_position(body: CelestialBody, anchor_time: float) -> Vector2:
+	return body.position_at(Sim.time if is_nan(anchor_time) else anchor_time)
+
+
+## The drawn, clickable stretches of the planned path, in time order. Each is a Dictionary:
+## body, orbit, anchor_time, from_time, to_time, patch (the prediction patch it comes from).
+## A stretch ends at the next maneuver or where its patch ends.
+func path_windows() -> Array[Dictionary]:
+	var windows: Array[Dictionary] = []
+	for k in plan.size():
+		var limit: float = plan[k + 1][0].start_time if k + 1 < plan.size() else INF
+		windows.append_array(_segment_windows(k, limit))
+	return windows
+
+
+## Stretches a maneuver can slide along: its own segment, up to the next maneuver.
+func windows_for_moving(maneuver: Maneuver) -> Array[Dictionary]:
+	var index := maneuvers.find(maneuver)
+	var limit := INF
+	if index + 1 < maneuvers.size() and maneuvers[index + 1].valid:
+		limit = maneuvers[index + 1].time
+	return _segment_windows(maneuver.segment_index, limit)
 
 
 ## Game seconds needed to change speed by delta_v (m/s) at full thrust.
@@ -109,7 +155,7 @@ func burn_duration(delta_v: float) -> float:
 
 ## The next encounter in a prediction: {"body", "time", "closest_approach"} (closest approach is an
 ## altitude in km), or an empty Dictionary if there is none.
-func next_encounter(patches: Array[Dictionary]) -> Dictionary:
+func next_encounter(patches: Array) -> Dictionary:
 	for i in patches.size() - 1:
 		if patches[i].end == "encounter":
 			var flyby: Dictionary = patches[i + 1]
@@ -139,7 +185,7 @@ func _process(_delta: float) -> void:
 			return _local_to_world(command, relative_position, velocity))
 		delta_v_used += thrust.length() * thrust_acceleration * (now - _last_time)
 		orbit_changed = true
-	if maneuver and not crashed and _fly_maneuver(_last_time, now):
+	if not maneuvers.is_empty() and not crashed and _fly_maneuver(_last_time, now):
 		orbit_changed = true
 	if orbit_changed:
 		_predict(now)
@@ -152,8 +198,8 @@ func _process(_delta: float) -> void:
 		var relative_position := orbit.position_at(now)
 		if relative_position.length() <= reference_body.radius:
 			crashed = true
-			maneuver = null
-			planned_prediction = []
+			maneuvers = []
+			update_plan()
 			_crash_position = relative_position.normalized() * reference_body.radius
 
 	var body_position := reference_body.position_at(now)
@@ -169,7 +215,7 @@ func _process(_delta: float) -> void:
 		rotation = (velocity if engine_output == Vector2.ZERO else engine_output).angle()
 
 	scale = Vector2.ONE / get_viewport().get_canvas_transform().get_scale().x
-	_update_trajectory_view(now)
+	_update_trajectory_view()
 	queue_redraw()
 
 
@@ -186,8 +232,45 @@ func _draw() -> void:
 
 func _predict(time: float) -> void:
 	prediction = Trajectory.predict(reference_body, orbit, time)
+	_set_anchor_times(prediction, NAN)
 	_next_prediction_time = time + PREDICTION_REFRESH
 	update_plan()
+
+
+## Orbits around a body the ship isn't in yet are drawn around where that body will be when the ship
+## arrives. The first patch inherits the anchor of the stretch it continues.
+func _set_anchor_times(patches: Array[Dictionary], first_anchor_time: float) -> void:
+	for i in patches.size():
+		var patch := patches[i]
+		var body: CelestialBody = patch.body
+		if i == 0:
+			patch["anchor_time"] = first_anchor_time
+		elif body == reference_body or body.parent_body == null:
+			patch["anchor_time"] = NAN
+		else:
+			patch["anchor_time"] = patch.start_time
+
+
+func _patch_at(patches: Array[Dictionary], time: float) -> Dictionary:
+	for patch in patches:
+		if time >= patch.start_time and time < patch.end_time:
+			return patch
+	return {}
+
+
+func _segment_windows(k: int, limit: float) -> Array[Dictionary]:
+	var windows: Array[Dictionary] = []
+	var segment: Array[Dictionary] = plan[k]
+	for i in segment.size():
+		var patch := segment[i]
+		var from_time: float = Sim.time if k == 0 and i == 0 else patch.start_time
+		if from_time >= limit:
+			break
+		windows.append({
+			"body": patch.body, "orbit": patch.orbit, "anchor_time": patch.anchor_time,
+			"from_time": from_time, "to_time": minf(patch.end_time, limit), "patch": patch,
+		})
+	return windows
 
 
 ## Switches gravity at exactly the moments the prediction says, so the ship always does what was drawn.
@@ -203,15 +286,16 @@ func _follow_prediction(now: float) -> void:
 		_predict(patch.end_time)
 
 
-## Flies the part of the maneuver burn that falls between from_time and to_time.
+## Flies the part of the first maneuver's burn that falls between from_time and to_time.
 ## The burn holds its direction relative to prograde and radial (not fixed in space), which keeps
 ## long burns close to the plan. Returns true if the orbit changed.
 func _fly_maneuver(from_time: float, to_time: float) -> bool:
+	var maneuver := maneuvers[0]
 	if not maneuver.burning:
 		var start := maneuver.time - burn_duration(maneuver.delta_v.length()) / 2.0
 		if to_time < start or maneuver_editing:
 			return false
-		_start_maneuver_burn()
+		_start_maneuver_burn(maneuver)
 		from_time = maxf(from_time, start)
 
 	var local_direction := maneuver.delta_v.normalized()
@@ -221,7 +305,7 @@ func _fly_maneuver(from_time: float, to_time: float) -> bool:
 	var step := (to_time - from_time) / steps
 	var burned := false
 	for i in steps:
-		if _maneuver_burn_done():
+		if _maneuver_burn_done(maneuver):
 			break
 		var duration := step if maneuver.energy_guided else minf(step, burn_duration(maneuver.remaining))
 		var t := from_time + step * i
@@ -232,12 +316,13 @@ func _fly_maneuver(from_time: float, to_time: float) -> bool:
 
 	if burned:
 		engine_output += direction.call(orbit.position_at(to_time), orbit.velocity_at(to_time))
-	if _maneuver_burn_done():
-		maneuver = null
+	if _maneuver_burn_done(maneuver):
+		maneuvers.erase(maneuver)
+		update_plan()
 	return burned
 
 
-func _start_maneuver_burn() -> void:
+func _start_maneuver_burn(maneuver: Maneuver) -> void:
 	var t := maneuver.time
 	var relative_position := orbit.position_at(t)
 	var velocity := orbit.velocity_at(t)
@@ -246,10 +331,10 @@ func _start_maneuver_burn() -> void:
 	maneuver.energy_guided = absf(maneuver.delta_v.x) >= absf(maneuver.delta_v.y)
 	maneuver.remaining = maneuver.delta_v.length()
 	maneuver.burning = true
-	planned_prediction = []
+	update_plan()
 
 
-func _maneuver_burn_done() -> bool:
+func _maneuver_burn_done(maneuver: Maneuver) -> bool:
 	if not maneuver.energy_guided:
 		return maneuver.remaining <= 1e-6
 	var energy := _orbital_energy(orbit)
@@ -296,7 +381,7 @@ func _local_to_world(local: Vector2, relative_position: Vector2, velocity: Vecto
 	return prograde * local.x + radial_out * local.y
 
 
-func _update_trajectory_view(now: float) -> void:
+func _update_trajectory_view() -> void:
 	var lines: Array[Dictionary] = []
 	var markers: Array[Dictionary] = []
 	var ghosts: Array[Dictionary] = []
@@ -304,84 +389,82 @@ func _update_trajectory_view(now: float) -> void:
 		trajectory_view.show_contents(lines, markers, ghosts)
 		return
 
-	if planned_prediction.is_empty():
-		_add_patches(prediction, now, now, false, lines, markers, ghosts)
-	else:
-		_add_patches(prediction, now, now, true, lines, markers, ghosts)
-		var points := _offset_points(_patch_points(orbit, now, maneuver.time), reference_body.position_at(now))
-		lines.append({"points": points, "color": PATCH_COLORS[0]})
-		_add_patches(planned_prediction, maneuver.time, now, false, lines, markers, ghosts)
+	if plan.size() > 1:
+		for window in _segment_windows(0, INF):
+			var faded := LEG_COLORS[0]
+			faded.a *= DIMMED_ALPHA
+			lines.append({"points": _window_points(window), "color": faded})
+
+	var leg := 0
+	var previous_body: CelestialBody = null
+	for window in path_windows():
+		if previous_body != null and window.body != previous_body:
+			leg += 1
+		previous_body = window.body
+		_add_window(window, LEG_COLORS[leg % LEG_COLORS.size()], lines, markers, ghosts)
 	trajectory_view.show_contents(lines, markers, ghosts)
 
 
-## Adds lines, markers and ghosts for a prediction. The first patch is drawn from first_start_time.
-## Dimmed predictions get faded lines only.
-func _add_patches(patches: Array[Dictionary], first_start_time: float, now: float, dimmed: bool,
+func _add_window(window: Dictionary, line_color: Color,
 		lines: Array[Dictionary], markers: Array[Dictionary], ghosts: Array[Dictionary]) -> void:
-	for i in patches.size():
-		var patch: Dictionary = patches[i]
-		var body: CelestialBody = patch.body
-		var patch_orbit: Orbit = patch.orbit
-		var patch_color := PATCH_COLORS[i % PATCH_COLORS.size()]
-		if dimmed:
-			patch_color.a *= DIMMED_ALPHA
-		var start_time: float = first_start_time if i == 0 else patch.start_time
-		var end_time: float = patch.end_time
+	var body: CelestialBody = window.body
+	var window_orbit: Orbit = window.orbit
+	var patch: Dictionary = window.patch
+	var from_time: float = window.from_time
+	var to_time: float = window.to_time
+	var anchor := anchor_position(body, window.anchor_time)
 
-		# Future flybys are drawn around where the body will be at the encounter, not where it is now.
-		var is_future_flyby := i > 0 and body.parent_body != null
-		var anchor := body.position_at(patch.start_time if is_future_flyby else now)
+	lines.append({"points": _window_points(window), "color": line_color})
 
-		var points := _offset_points(_patch_points(patch_orbit, start_time, end_time), anchor)
-		lines.append({"points": points, "color": patch_color})
-		if dimmed:
+	if not is_nan(window.anchor_time) and window.anchor_time == patch.start_time and from_time == patch.start_time:
+		ghosts.append({
+			"position": anchor, "radius": body.radius,
+			"sphere_of_influence": body.sphere_of_influence, "color": line_color,
+		})
+
+	for apsis in [[0.0, "Pe"], [PI, "Ap"]]:
+		if apsis[1] == "Ap" and not window_orbit.is_elliptic():
 			continue
-
-		if is_future_flyby:
-			ghosts.append({
-				"position": anchor, "radius": body.radius,
-				"sphere_of_influence": body.sphere_of_influence, "color": patch_color,
+		if window_orbit.next_time_at_true_anomaly(apsis[0], from_time) < to_time:
+			var distance := window_orbit.position_at_true_anomaly(apsis[0]).length()
+			markers.append({
+				"position": anchor + window_orbit.position_at_true_anomaly(apsis[0]),
+				"label": "%s %d km" % [apsis[1], roundi(distance - body.radius)],
+				"color": line_color,
 			})
 
-		for apsis in [[0.0, "Pe"], [PI, "Ap"]]:
-			if apsis[1] == "Ap" and not patch_orbit.is_elliptic():
-				continue
-			if patch_orbit.next_time_at_true_anomaly(apsis[0], start_time) < end_time:
-				var distance := patch_orbit.position_at_true_anomaly(apsis[0]).length()
-				markers.append({
-					"position": anchor + patch_orbit.position_at_true_anomaly(apsis[0]),
-					"label": "%s %d km" % [apsis[1], roundi(distance - body.radius)],
-					"color": patch_color,
-				})
-
-		var end_label := ""
-		match patch.end:
-			"impact":
-				end_label = "Impact"
-			"encounter":
-				end_label = "%s encounter" % patch.next_body.name
-			"escape":
-				end_label = "Leaving %s" % body.name
-		if end_label != "":
-			markers.append({"position": anchor + patch_orbit.position_at(end_time), "label": end_label, "color": patch_color})
+	if to_time != patch.end_time:
+		return
+	var end_label := ""
+	match patch.end:
+		"impact":
+			end_label = "Impact"
+		"encounter":
+			end_label = "%s encounter" % patch.next_body.name
+		"escape":
+			end_label = "Leaving %s" % body.name
+	if end_label != "":
+		markers.append({"position": anchor + window_orbit.position_at(to_time), "label": end_label, "color": line_color})
 
 
-func _offset_points(points: PackedVector2Array, offset: Vector2) -> PackedVector2Array:
+func _window_points(window: Dictionary) -> PackedVector2Array:
+	var points := _orbit_points(window.orbit, window.from_time, window.to_time)
+	var anchor := anchor_position(window.body, window.anchor_time)
 	for p in points.size():
-		points[p] += offset
+		points[p] += anchor
 	return points
 
 
-func _patch_points(patch_orbit: Orbit, from_time: float, to_time: float) -> PackedVector2Array:
-	var from_nu := patch_orbit.true_anomaly_at(from_time)
+func _orbit_points(of_orbit: Orbit, from_time: float, to_time: float) -> PackedVector2Array:
+	var from_nu := of_orbit.true_anomaly_at(from_time)
 	if is_inf(to_time):
-		if patch_orbit.is_elliptic():
-			return patch_orbit.sample_points()
-		var escape_nu := patch_orbit.true_anomaly_at_radius(Trajectory.ESCAPE_RADIUS)
-		return patch_orbit.sample_arc(from_nu, escape_nu) if escape_nu > from_nu else PackedVector2Array()
-	if patch_orbit.is_elliptic() and to_time - from_time >= patch_orbit.period():
-		return patch_orbit.sample_points()
-	var to_nu := patch_orbit.true_anomaly_at(to_time)
-	if patch_orbit.is_elliptic() and to_nu < from_nu:
+		if of_orbit.is_elliptic():
+			return of_orbit.sample_points()
+		var escape_nu := of_orbit.true_anomaly_at_radius(Trajectory.ESCAPE_RADIUS)
+		return of_orbit.sample_arc(from_nu, escape_nu) if escape_nu > from_nu else PackedVector2Array()
+	if of_orbit.is_elliptic() and to_time - from_time >= of_orbit.period():
+		return of_orbit.sample_points()
+	var to_nu := of_orbit.true_anomaly_at(to_time)
+	if of_orbit.is_elliptic() and to_nu < from_nu:
 		to_nu += TAU
-	return patch_orbit.sample_arc(from_nu, to_nu)
+	return of_orbit.sample_arc(from_nu, to_nu)
