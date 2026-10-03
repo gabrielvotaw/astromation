@@ -129,15 +129,33 @@ func _pick_time(mouse: Vector2, max_distance: float) -> float:
 			to_nu += TAU
 
 	var anchor := ship.reference_body.position_at(now)
+	var screen_distance := func(nu: float) -> float:
+		return mouse.distance_to(_to_screen(anchor + orbit.position_at_true_anomaly(nu)))
+
+	var step := (to_nu - from_nu) / PICK_SAMPLES
 	var best_nu := NAN
 	var best_distance := max_distance
 	for i in PICK_SAMPLES + 1:
-		var nu := lerpf(from_nu, to_nu, float(i) / PICK_SAMPLES)
-		var distance := mouse.distance_to(_to_screen(anchor + orbit.position_at_true_anomaly(nu)))
+		var nu := from_nu + step * i
+		var distance: float = screen_distance.call(nu)
 		if distance < best_distance:
 			best_distance = distance
 			best_nu = nu
-	return NAN if is_nan(best_nu) else orbit.next_time_at_true_anomaly(best_nu, now)
+	if is_nan(best_nu):
+		return NAN
+
+	# Refine between the neighboring samples so the result doesn't depend on where the samples
+	# fall (they shift every frame as the ship moves, which made the pick jitter).
+	var low := maxf(best_nu - step, from_nu)
+	var high := minf(best_nu + step, to_nu)
+	for i in 30:
+		var a := lerpf(low, high, 1.0 / 3.0)
+		var b := lerpf(low, high, 2.0 / 3.0)
+		if screen_distance.call(a) < screen_distance.call(b):
+			high = b
+		else:
+			low = a
+	return orbit.next_time_at_true_anomaly((low + high) / 2.0, now)
 
 
 func _handle_direction(frame: Dictionary, axis: Vector2) -> Vector2:

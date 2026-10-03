@@ -8,7 +8,9 @@ func run(host: Node) -> int:
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	host.add_child(main)
 	var ship: Ship = main.get_node("Ship")
+	var planner: ManeuverPlanner = main.get_node("ManeuverPlanner")
 
+	_test_orbit_picking_is_stable(ship, planner)
 	_test_plan_applies_delta_v(ship)
 	_test_executed_burn_matches_plan(ship)
 	_test_long_burn_stays_close_to_plan(ship)
@@ -16,6 +18,22 @@ func run(host: Node) -> int:
 	host.remove_child(main)
 	main.free()
 	return _failures
+
+
+func _test_orbit_picking_is_stable(ship: Ship, planner: ManeuverPlanner) -> void:
+	ship.reset()
+	var start := Sim.time
+	var anchor := ship.reference_body.position_at(start)
+	var mouse := planner._to_screen(anchor + ship.orbit.position_at(start + ship.orbit.period() * 0.4)) + Vector2(3, 2)
+	var picks: Array[Vector2] = []
+	for i in 10:
+		Sim.time = start + i * 3.7
+		picks.append(planner._to_screen(anchor + ship.orbit.position_at(planner._pick_time(mouse, ManeuverPlanner.PICK_RADIUS))))
+	Sim.time = start
+	var spread := 0.0
+	for pick in picks:
+		spread = maxf(spread, pick.distance_to(picks[0]))
+	_check("picked orbit point stays put while the ship moves (spread %.3f px)" % spread, spread < 0.05)
 
 
 func _test_plan_applies_delta_v(ship: Ship) -> void:
