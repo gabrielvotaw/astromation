@@ -1,9 +1,11 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/celestial_body.gd" id="1_body"]
 [ext_resource type="Script" path="res://scripts/ring.gd" id="2_ring"]
 [ext_resource type="Script" path="res://scripts/orbit_camera.gd" id="3_camera"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="4_hud"]
+[ext_resource type="Script" path="res://scripts/orbit_line.gd" id="5_orbit_line"]
+[ext_resource type="Script" path="res://scripts/ship.gd" id="6_ship"]
 
 [node name="Main" type="Node2D"]
 
@@ -13,20 +15,29 @@ script = ExtResource("2_ring")
 [node name="Haven" type="Node2D" parent="."]
 script = ExtResource("1_body")
 
+[node name="ShipOrbitLine" type="Node2D" parent="."]
+script = ExtResource("5_orbit_line")
+
+[node name="Ship" type="Node2D" parent="." node_paths=PackedStringArray("central_body", "orbit_line")]
+script = ExtResource("6_ship")
+central_body = NodePath("../Haven")
+orbit_line = NodePath("../ShipOrbitLine")
+
 [node name="Camera" type="Camera2D" parent="."]
 zoom = Vector2(0.3, 0.3)
 script = ExtResource("3_camera")
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." node_paths=PackedStringArray("ship")]
 script = ExtResource("4_hud")
+ship = NodePath("../Ship")
 
 [node name="Controls" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 12.0
 theme_override_colors/font_color = Color(0.8, 0.85, 0.95, 0.8)
-text = "Scroll: zoom    Right/middle drag or WASD: pan    F: recenter"
+text = "Scroll: zoom    Right/middle drag or WASD: pan    F: recenter    Comma/Period: sim speed"
 
-[node name="ScaleLabel" type="Label" parent="HUD"]
+[node name="InfoLabel" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 40.0
 theme_override_colors/font_color = Color(0.8, 0.85, 0.95, 0.8)
