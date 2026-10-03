@@ -23,6 +23,8 @@ const DIMMED_ALPHA := 0.3
 @export var apoapsis_altitude := 400.0
 ## Engine acceleration in m/s².
 @export var thrust_acceleration := 2.0
+## Crates the ship can carry.
+@export var capacity := 10.0
 @export var hull_color := Color(0.88, 0.9, 0.94)
 @export var accent_color := Color(0.95, 0.45, 0.2)
 @export var window_color := Color(0.35, 0.75, 1.0)
@@ -49,6 +51,10 @@ var delta_v_used := 0.0
 var thrust := Vector2.ZERO
 ## World direction the engine pushed this frame, scaled by throttle. Zero when the engine is off.
 var engine_output := Vector2.ZERO
+## Crates on board. Fractional while a depot is mid-transfer.
+var cargo := 0.0
+## The depot the ship is docked at, or null. Set by Depot.
+var docked_at: Depot
 
 var _last_time := 0.0
 var _next_prediction_time := 0.0
@@ -56,6 +62,7 @@ var _crash_position := Vector2.ZERO
 
 
 func _ready() -> void:
+	add_to_group("ships")
 	reset()
 
 
@@ -67,6 +74,8 @@ func reset() -> void:
 	orbit = Orbit.from_state(home_body.mu, Vector2(periapsis, 0.0), Vector2(0.0, -speed), Sim.time)
 	crashed = false
 	delta_v_used = 0.0
+	cargo = 0.0
+	docked_at = null
 	maneuvers = []
 	_last_time = Sim.time
 	_predict(Sim.time)

@@ -44,7 +44,26 @@ func _process(_delta: float) -> void:
 			lines.append("")
 			lines.append_array(_maneuver_lines())
 
+	if ship:
+		lines.append("")
+		lines.append_array(_cargo_lines())
+
 	_info_label.text = "\n".join(lines)
+
+
+func _cargo_lines() -> PackedStringArray:
+	var lines := PackedStringArray()
+	var status := ""
+	if ship.docked_at:
+		var depot := ship.docked_at
+		var busy := ship.cargo < ship.capacity if depot.kind == Depot.Kind.SUPPLY else ship.cargo > 0.0
+		var activity := ("loading" if depot.kind == Depot.Kind.SUPPLY else "unloading") if busy else "done"
+		status = "    Docked at %s (%s)" % [depot.label, activity]
+	lines.append("Cargo: %d/%d crates%s" % [floori(ship.cargo), roundi(ship.capacity), status])
+	for depot in get_tree().get_nodes_in_group("depots"):
+		var verb := "handed out" if depot.kind == Depot.Kind.SUPPLY else "delivered"
+		lines.append("%s: %d crates %s" % [depot.label, floori(depot.crates_moved), verb])
+	return lines
 
 
 func _maneuver_lines() -> PackedStringArray:

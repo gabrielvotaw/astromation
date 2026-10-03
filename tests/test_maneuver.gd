@@ -49,7 +49,7 @@ func _test_plan_applies_delta_v(ship: Ship) -> void:
 	var planned: Orbit = ship.plan[1][0].orbit
 	var expected_speed := ship.orbit.velocity_at(t).length() + 0.1
 	_check("plan adds prograde delta-v at the maneuver time", absf(planned.velocity_at(t).length() - expected_speed) < 1e-4)
-	_check("prograde burn at apoapsis raises periapsis", planned.periapsis() > ship.orbit.periapsis() + 50.0)
+	_check("prograde burn raises apoapsis", planned.apoapsis() > ship.orbit.apoapsis() + 50.0)
 
 
 func _test_executed_burn_matches_plan(ship: Ship) -> void:

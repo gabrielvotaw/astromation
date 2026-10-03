@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/celestial_body.gd" id="1_body"]
 [ext_resource type="Script" path="res://scripts/ring.gd" id="2_ring"]
@@ -10,6 +10,7 @@
 [ext_resource type="Shader" path="res://shaders/planet.gdshader" id="10_planet_shader"]
 [ext_resource type="Shader" path="res://shaders/starfield.gdshader" id="11_starfield_shader"]
 [ext_resource type="Script" path="res://scripts/starfield.gd" id="12_starfield"]
+[ext_resource type="Script" path="res://scripts/depot.gd" id="13_depot"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_stars"]
 shader = ExtResource("11_starfield_shader")
@@ -74,6 +75,19 @@ sphere_of_influence_ring = NodePath("SphereOfInfluence")
 script = ExtResource("2_ring")
 color = Color(0.8, 0.8, 0.85, 0.18)
 
+[node name="HavenDepot" type="Node2D" parent="." node_paths=PackedStringArray("body")]
+script = ExtResource("13_depot")
+body = NodePath("../Haven")
+label = "Haven Depot"
+
+[node name="PaleDepot" type="Node2D" parent="." node_paths=PackedStringArray("body")]
+script = ExtResource("13_depot")
+body = NodePath("../Pale")
+altitude = 300.0
+kind = 1
+label = "Pale Depot"
+color = Color(1, 0.7, 0.35, 0.75)
+
 [node name="Trajectory" type="Node2D" parent="."]
 script = ExtResource("5_trajectory_view")
 
@@ -81,6 +95,8 @@ script = ExtResource("5_trajectory_view")
 script = ExtResource("6_ship")
 home_body = NodePath("../Haven")
 trajectory_view = NodePath("../Trajectory")
+periapsis_altitude = 150.0
+apoapsis_altitude = 150.0
 
 [node name="ManeuverPlanner" type="Node2D" parent="." node_paths=PackedStringArray("ship")]
 script = ExtResource("7_planner")
