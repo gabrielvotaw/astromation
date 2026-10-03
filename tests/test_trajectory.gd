@@ -9,7 +9,7 @@ var _pale: CelestialBody
 
 
 ## Runs every test and returns the number of failures.
-func run() -> int:
+func run(_host: Node) -> int:
 	_test_next_time_at_true_anomaly()
 	_test_low_orbit_has_no_events()
 	_test_transfer_finds_pale_encounter()

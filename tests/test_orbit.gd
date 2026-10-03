@@ -6,7 +6,7 @@ var _failures := 0
 
 
 ## Runs every test and returns the number of failures.
-func run() -> int:
+func run(_host: Node) -> int:
 	_test_circular_orbit_does_not_drift()
 	_test_apsides_match_construction()
 	_test_round_trip_elliptic()
