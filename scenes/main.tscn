@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/celestial_body.gd" id="1_body"]
 [ext_resource type="Script" path="res://scripts/ring.gd" id="2_ring"]
@@ -7,22 +7,63 @@
 [ext_resource type="Script" path="res://scripts/trajectory_view.gd" id="5_trajectory_view"]
 [ext_resource type="Script" path="res://scripts/ship.gd" id="6_ship"]
 [ext_resource type="Script" path="res://scripts/maneuver_planner.gd" id="7_planner"]
+[ext_resource type="Shader" path="res://shaders/planet.gdshader" id="10_planet_shader"]
+[ext_resource type="Shader" path="res://shaders/starfield.gdshader" id="11_starfield_shader"]
+[ext_resource type="Script" path="res://scripts/starfield.gd" id="12_starfield"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_stars"]
+shader = ExtResource("11_starfield_shader")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_haven"]
+shader = ExtResource("10_planet_shader")
+shader_parameter/ocean_color = Color(0.06, 0.2, 0.42, 1)
+shader_parameter/land_color = Color(0.2, 0.4, 0.2, 1)
+shader_parameter/highland_color = Color(0.55, 0.5, 0.36, 1)
+shader_parameter/land_level = 0.5
+shader_parameter/noise_scale = 2.2
+shader_parameter/cap_latitude = 0.82
+shader_parameter/cloud_amount = 0.65
+shader_parameter/atmosphere_color = Color(0.45, 0.7, 1, 0.55)
+shader_parameter/seed = 3.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pale"]
+shader = ExtResource("10_planet_shader")
+shader_parameter/land_color = Color(0.46, 0.46, 0.48, 1)
+shader_parameter/highland_color = Color(0.7, 0.7, 0.72, 1)
+shader_parameter/noise_scale = 3.0
+shader_parameter/crater_amount = 1.0
+shader_parameter/seed = 11.0
 
 [node name="Main" type="Node2D"]
+
+[node name="Background" type="CanvasLayer" parent="."]
+layer = -10
+
+[node name="Starfield" type="ColorRect" parent="Background"]
+material = SubResource("ShaderMaterial_stars")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("12_starfield")
 
 [node name="PaleOrbit" type="Node2D" parent="."]
 script = ExtResource("2_ring")
 color = Color(1, 1, 1, 0.12)
 
 [node name="Haven" type="Node2D" parent="."]
+material = SubResource("ShaderMaterial_haven")
 script = ExtResource("1_body")
+spin_rate = 0.0003
 
 [node name="Pale" type="Node2D" parent="." node_paths=PackedStringArray("parent_body", "orbit_ring", "sphere_of_influence_ring")]
+material = SubResource("ShaderMaterial_pale")
 script = ExtResource("1_body")
 radius = 200.0
 mu = 65.138
 atmosphere_height = 0.0
-surface_color = Color(0.62, 0.62, 0.66, 1)
 parent_body = NodePath("../Haven")
 orbit_radius = 8000.0
 orbit_start_angle = -150.0
