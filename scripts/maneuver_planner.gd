@@ -37,7 +37,17 @@ var _drag_start_delta_v := Vector2.ZERO
 var _hover := {}
 
 
+## Switches planning to another ship, dropping any selection or drag on the previous one.
+func select_ship(new_ship: Ship) -> void:
+	ship = new_ship
+	_selected = null
+	_drag = Drag.NONE
+	_hover = {}
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if ship == null:
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if not event.pressed:
 			_drag = Drag.NONE
@@ -52,6 +62,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(_delta: float) -> void:
+	queue_redraw()
+	if ship == null:
+		return
 	if _selected and not ship.maneuvers.has(_selected):
 		_selected = null
 	ship.maneuver_editing = _drag != Drag.NONE
@@ -60,7 +73,6 @@ func _process(_delta: float) -> void:
 	var mouse := get_viewport().get_mouse_position()
 	if not ship.crashed and _drag == Drag.NONE and _node_at(mouse) == null and _handle_at(mouse).is_empty():
 		_hover = _pick(mouse, ship.path_windows(), PICK_RADIUS)
-	queue_redraw()
 
 
 func _start_drag(mouse: Vector2) -> bool:
@@ -203,6 +215,8 @@ func _to_screen(world_position: Vector2) -> Vector2:
 
 
 func _draw() -> void:
+	if ship == null:
+		return
 	var zoom := get_viewport().get_canvas_transform().get_scale().x
 	var font := ThemeDB.fallback_font
 

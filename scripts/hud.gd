@@ -1,6 +1,11 @@
 extends CanvasLayer
 
-@export var ship: Ship
+@export var fleet: Fleet
+
+## The ship the HUD describes: the fleet's selected ship.
+var ship: Ship:
+	get:
+		return fleet.selected if fleet else null
 
 @onready var _info_label: Label = $InfoLabel
 
@@ -14,6 +19,9 @@ func _process(_delta: float) -> void:
 		"View width: %s km%s" % [_format_thousands(roundi(view_width_km)), following],
 		"Sim speed: %s    T+ %s" % ["PAUSED" if Sim.paused else "%sx" % String.num(Sim.speed), _format_duration(Sim.time)],
 	])
+	if ship:
+		lines.append("")
+		lines.append("Selected: %s    (%d ship%s)" % [ship.display_name, fleet.ships.size(), "" if fleet.ships.size() == 1 else "s"])
 
 	if ship and ship.crashed:
 		lines.append("")

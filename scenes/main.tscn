@@ -1,16 +1,17 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/celestial_body.gd" id="1_body"]
 [ext_resource type="Script" path="res://scripts/ring.gd" id="2_ring"]
 [ext_resource type="Script" path="res://scripts/orbit_camera.gd" id="3_camera"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="4_hud"]
 [ext_resource type="Script" path="res://scripts/trajectory_view.gd" id="5_trajectory_view"]
-[ext_resource type="Script" path="res://scripts/ship.gd" id="6_ship"]
 [ext_resource type="Script" path="res://scripts/maneuver_planner.gd" id="7_planner"]
 [ext_resource type="Shader" path="res://shaders/planet.gdshader" id="10_planet_shader"]
 [ext_resource type="Shader" path="res://shaders/starfield.gdshader" id="11_starfield_shader"]
 [ext_resource type="Script" path="res://scripts/starfield.gd" id="12_starfield"]
 [ext_resource type="Script" path="res://scripts/depot.gd" id="13_depot"]
+[ext_resource type="Script" path="res://scripts/fleet.gd" id="14_fleet"]
+[ext_resource type="PackedScene" path="res://scenes/ship.tscn" id="15_ship_scene"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_stars"]
 shader = ExtResource("11_starfield_shader")
@@ -88,36 +89,42 @@ kind = 1
 label = "Pale Depot"
 color = Color(1, 0.7, 0.35, 0.75)
 
+[node name="FleetView" type="Node2D" parent="."]
+script = ExtResource("5_trajectory_view")
+marker_font_size = 12
+
 [node name="Trajectory" type="Node2D" parent="."]
 script = ExtResource("5_trajectory_view")
 
-[node name="Ship" type="Node2D" parent="." node_paths=PackedStringArray("home_body", "trajectory_view")]
-script = ExtResource("6_ship")
+[node name="ManeuverPlanner" type="Node2D" parent="."]
+script = ExtResource("7_planner")
+
+[node name="Fleet" type="Node2D" parent="." node_paths=PackedStringArray("home_body", "trajectory_view", "fleet_view", "planner")]
+script = ExtResource("14_fleet")
+ship_scene = ExtResource("15_ship_scene")
 home_body = NodePath("../Haven")
 trajectory_view = NodePath("../Trajectory")
-periapsis_altitude = 150.0
-apoapsis_altitude = 150.0
+fleet_view = NodePath("../FleetView")
+planner = NodePath("../ManeuverPlanner")
 
-[node name="ManeuverPlanner" type="Node2D" parent="." node_paths=PackedStringArray("ship")]
-script = ExtResource("7_planner")
-ship = NodePath("../Ship")
+[node name="Ship" type="Node2D" parent="Fleet"]
 
 [node name="Camera" type="Camera2D" parent="." node_paths=PackedStringArray("focus_targets")]
 zoom = Vector2(0.3, 0.3)
 script = ExtResource("3_camera")
-focus_targets = [NodePath("../Haven"), NodePath("../Ship"), NodePath("../Pale")]
+focus_targets = [NodePath("../Haven"), NodePath("../Fleet/Ship"), NodePath("../Pale")]
 
-[node name="HUD" type="CanvasLayer" parent="." node_paths=PackedStringArray("ship")]
+[node name="HUD" type="CanvasLayer" parent="." node_paths=PackedStringArray("fleet")]
 script = ExtResource("4_hud")
-ship = NodePath("../Ship")
+fleet = NodePath("../Fleet")
 
 [node name="Controls" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 12.0
 theme_override_colors/font_color = Color(0.8, 0.85, 0.95, 0.8)
-text = "W/S: prograde/retrograde    A/D: radial in/out    Shift: fine thrust    R: reset\nClick path: add maneuver    Click node: select    Drag handles: set burn (Shift: fine)    Drag node: move it    X: delete\nScroll: zoom    Right/middle drag or arrows: pan    F: cycle camera focus    Space: pause    Comma/Period: sim speed"
+text = "W/S: prograde/retrograde    A/D: radial in/out    Shift: fine thrust    R: reset ship\nN: new ship    Tab / Shift+Tab: next / previous ship    Click ship: select\nClick path: add maneuver    Click node: select    Drag handles: set burn (Shift: fine)    Drag node: move it    X: delete\nScroll: zoom    Right/middle drag or arrows: pan    F: cycle camera focus    Space: pause    Comma/Period: sim speed"
 
 [node name="InfoLabel" type="Label" parent="HUD"]
 offset_left = 16.0
-offset_top = 92.0
+offset_top = 116.0
 theme_override_colors/font_color = Color(0.8, 0.85, 0.95, 0.8)

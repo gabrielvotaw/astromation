@@ -1,8 +1,8 @@
 class_name Ship
 extends Node2D
 
-## W/S: prograde/retrograde. A/D: radial in/out. Shift: 10% thrust. R: reset.
-## Planned maneuvers are flown automatically, each burn centered on its maneuver time.
+## When selected (see Fleet): W/S: prograde/retrograde. A/D: radial in/out. Shift: 10% thrust. R: reset.
+## Planned maneuvers are flown automatically, selected or not, each burn centered on its maneuver time.
 
 ## Longest stretch of game time one thrust step covers, in seconds. Keeps burns accurate at high sim speed.
 const MAX_BURN_STEP := 0.5
@@ -21,6 +21,8 @@ const DIMMED_ALPHA := 0.3
 @export var trajectory_view: TrajectoryView
 @export var periapsis_altitude := 100.0
 @export var apoapsis_altitude := 400.0
+## Where around home_body the ship starts (and resets to), in radians.
+@export var spawn_angle := 0.0
 ## Engine acceleration in m/s².
 @export var thrust_acceleration := 2.0
 ## Crates the ship can carry.
@@ -31,6 +33,9 @@ const DIMMED_ALPHA := 0.3
 @export var flame_color := Color(1.0, 0.5, 0.15)
 @export var flame_core_color := Color(1.0, 0.92, 0.6)
 
+var display_name := "Ship"
+## Only the selected ship takes keyboard input and draws its full trajectory. Set by Fleet.
+var selected := false
 ## The body whose gravity the ship currently feels. `orbit` is relative to it.
 var reference_body: CelestialBody
 var orbit: Orbit
@@ -72,7 +77,8 @@ func reset() -> void:
 	var periapsis := home_body.radius + periapsis_altitude
 	var semi_major_axis := periapsis + (apoapsis_altitude - periapsis_altitude) / 2.0
 	var speed := sqrt(home_body.mu * (2.0 / periapsis - 1.0 / semi_major_axis))
-	orbit = Orbit.from_state(home_body.mu, Vector2(periapsis, 0.0), Vector2(0.0, -speed), Sim.time)
+	var direction := Vector2.from_angle(spawn_angle)
+	orbit = Orbit.from_state(home_body.mu, direction * periapsis, direction.orthogonal() * speed, Sim.time)
 	crashed = false
 	delta_v_used = 0.0
 	cargo = 0
@@ -182,8 +188,14 @@ func next_encounter(patches: Array) -> Dictionary:
 	return {}
 
 
+## World-space points along the ship's current orbit, up to its next encounter or impact.
+func current_orbit_points() -> PackedVector2Array:
+	var windows := _segment_windows(0, INF)
+	return _window_points(windows[0]) if not windows.is_empty() else PackedVector2Array()
+
+
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R:
+	if selected and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R:
 		reset()
 
 
@@ -229,12 +241,16 @@ func _process(_delta: float) -> void:
 		rotation = (velocity if engine_output == Vector2.ZERO else engine_output).angle()
 
 	scale = Vector2.ONE / get_viewport().get_canvas_transform().get_scale().x
-	_update_trajectory_view()
+	modulate.a = 1.0 if selected else 0.75
+	if selected:
+		_update_trajectory_view()
 	queue_redraw()
 
 
 ## Drawn in screen pixels (the node is scaled by 1/zoom), pointing along +x.
 func _draw() -> void:
+	if selected:
+		draw_arc(Vector2.ZERO, 18.0, 0.0, TAU, 40, Color(1, 1, 1, 0.55), 1.5, true)
 	if engine_output != Vector2.ZERO:
 		var length := (7.0 + 11.0 * minf(engine_output.length(), 1.0)) * randf_range(0.85, 1.15)
 		draw_colored_polygon(PackedVector2Array([Vector2(-9, 3.5), Vector2(-9 - length, 0), Vector2(-9, -3.5)]), flame_color)
@@ -372,6 +388,8 @@ func _orbital_energy(of_orbit: Orbit) -> float:
 
 
 func _read_thrust_input() -> Vector2:
+	if not selected:
+		return Vector2.ZERO
 	var command := Vector2(_key(KEY_W) - _key(KEY_S), _key(KEY_D) - _key(KEY_A))
 	if command == Vector2.ZERO:
 		return command

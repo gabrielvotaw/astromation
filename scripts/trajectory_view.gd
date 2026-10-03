@@ -9,7 +9,8 @@ extends Node2D
 
 ## Each: {"points": PackedVector2Array, "color": Color}
 var _lines: Array[Dictionary] = []
-## Each: {"position": Vector2, "label": String, "color": Color}
+## Each: {"position": Vector2, "label": String, "color": Color}, optionally "dot": false to draw only
+## the label and "offset": Vector2 to move the label (screen pixels).
 var _markers: Array[Dictionary] = []
 ## Each: {"position": Vector2, "radius": float, "sphere_of_influence": float, "color": Color,
 ## "depots": Array of the body's Depots, drawn around the ghost}
@@ -42,6 +43,7 @@ func _draw() -> void:
 	var font := ThemeDB.fallback_font
 	for marker in _markers:
 		draw_set_transform(marker.position, 0.0, Vector2.ONE / zoom)
-		draw_circle(Vector2.ZERO, 3.5, marker.color, true, -1.0, true)
-		draw_string(font, Vector2(7, -5), marker.label, HORIZONTAL_ALIGNMENT_LEFT, -1, marker_font_size, marker.color)
+		if marker.get("dot", true):
+			draw_circle(Vector2.ZERO, 3.5, marker.color, true, -1.0, true)
+		draw_string(font, marker.get("offset", Vector2(7, -5)), marker.label, HORIZONTAL_ALIGNMENT_LEFT, -1, marker_font_size, marker.color)
 	draw_set_transform(Vector2.ZERO)

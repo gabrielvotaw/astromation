@@ -7,7 +7,7 @@ var _failures := 0
 func run(host: Node) -> int:
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	host.add_child(main)
-	var ship: Ship = main.get_node("Ship")
+	var ship: Ship = main.get_node("Fleet").selected
 	var planner: ManeuverPlanner = main.get_node("ManeuverPlanner")
 	var pale: CelestialBody = main.get_node("Pale")
 

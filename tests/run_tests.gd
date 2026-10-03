@@ -8,6 +8,7 @@ const SUITES := [
 	preload("res://tests/test_trajectory.gd"),
 	preload("res://tests/test_maneuver.gd"),
 	preload("res://tests/test_depot.gd"),
+	preload("res://tests/test_fleet.gd"),
 ]
 
 
